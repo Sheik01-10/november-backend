@@ -68,4 +68,14 @@ const productSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+productSchema.pre("save", function (next) {
+  if (this.comparePrice && this.comparePrice > this.price) {
+    const discount = Math.round(((this.comparePrice - this.price) / this.comparePrice) * 100);
+    this.pct = `-${discount}%`;
+  } else {
+    this.pct = "";
+  }
+  next();
+});
+
 module.exports = mongoose.model("Product", productSchema);

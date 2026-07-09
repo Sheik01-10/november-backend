@@ -22,7 +22,16 @@ const razorpay = new Razorpay({
 // Create a Razorpay Order
 exports.createRazorpayOrder = async (req, res) => {
   try {
-    const { items } = req.body;
+    const { items, email } = req.body;
+    if (!email) {
+      return res.status(401).json({ message: "Unauthorized. Email is required to create a payment order." });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized. You must have a registered account to create a payment order." });
+    }
+
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Items array is required to calculate total" });
     }
@@ -71,6 +80,12 @@ exports.verifyPaymentSignature = async (req, res) => {
       return res.status(400).json({ message: "Missing required payment verification details" });
     }
 
+    // Verify user existence before creating the order
+    const user = await User.findOne({ email: orderData.customerEmail?.toLowerCase() });
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized. You must have a registered account to place an order." });
+    }
+
     // Verify payment signature
     const hmac = crypto.createHmac("sha256", key_secret);
     hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
@@ -107,16 +122,12 @@ exports.verifyPaymentSignature = async (req, res) => {
 
     const savedOrder = await newOrder.save();
 
-    // Update User order history if user is logged in
-    const user = await User.findOne({ email: orderData.customerEmail.toLowerCase() });
-    if (user) {
-      // Initialize orders array if not present
-      if (!user.orders) {
-        user.orders = [];
-      }
-      user.orders.push(savedOrder._id);
-      await user.save();
+    // Update User order history (user already found)
+    if (!user.orders) {
+      user.orders = [];
     }
+    user.orders.push(savedOrder._id);
+    await user.save();
 
     // Emit socket event for real-time admin updates
     const io = req.app.get("io");

@@ -13,6 +13,17 @@ exports.getOrders = async (req, res) => {
 // Create new order
 exports.createOrder = async (req, res) => {
   try {
+    const { customerEmail } = req.body;
+    if (!customerEmail) {
+      return res.status(401).json({ message: "Unauthorized. Email is required to place an order." });
+    }
+
+    const User = require("../models/User");
+    const user = await User.findOne({ email: customerEmail.toLowerCase() });
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized. You must have a registered account to place an order." });
+    }
+
     // Generate a unique order ID
     const count = await Order.countDocuments();
     const orderId = `ORD-${1000 + count + 1}`;
@@ -26,16 +37,10 @@ exports.createOrder = async (req, res) => {
     const order = new Order(orderData);
     const newOrder = await order.save();
 
-    // Update User order history if user is logged in
-    if (newOrder.customerEmail) {
-      const User = require("../models/User");
-      const user = await User.findOne({ email: newOrder.customerEmail.toLowerCase() });
-      if (user) {
-        if (!user.orders) user.orders = [];
-        user.orders.push(newOrder._id);
-        await user.save();
-      }
-    }
+    // Update User order history
+    if (!user.orders) user.orders = [];
+    user.orders.push(newOrder._id);
+    await user.save();
 
     // Emit socket event
     const io = req.app.get("io");
