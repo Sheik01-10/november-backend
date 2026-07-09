@@ -47,7 +47,8 @@ exports.createRazorpayOrder = async (req, res) => {
         return res.status(404).json({ message: `Product not found: ${item.name || productId}` });
       }
       subtotal += product.price * (item.quantity || 1);
-      shippingCharge += (product.deliveryCharge || 0) * (item.quantity || 1);
+      const charge = product.deliveryCharge !== undefined ? product.deliveryCharge : 150;
+      shippingCharge += charge * (item.quantity || 1);
     }
 
     let finalAmount = subtotal;

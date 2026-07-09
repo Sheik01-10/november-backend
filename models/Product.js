@@ -67,7 +67,7 @@ const productSchema = new mongoose.Schema(
 
     deliveryCharge: {
       type: Number,
-      default: 0,
+      default: 150,
     },
   },
   { timestamps: true }
