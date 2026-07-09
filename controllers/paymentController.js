@@ -37,7 +37,8 @@ exports.createRazorpayOrder = async (req, res) => {
     }
 
     // Securely calculate amount from database to prevent price tampering
-    let totalAmount = 0;
+    let subtotal = 0;
+    let shippingCharge = 0;
     for (const item of items) {
       // Find product by id (the item has an 'id' field matching product._id)
       const productId = item.id || item._id;
@@ -45,11 +46,17 @@ exports.createRazorpayOrder = async (req, res) => {
       if (!product) {
         return res.status(404).json({ message: `Product not found: ${item.name || productId}` });
       }
-      totalAmount += product.price * (item.quantity || 1);
+      subtotal += product.price * (item.quantity || 1);
+      shippingCharge += (product.deliveryCharge || 0) * (item.quantity || 1);
+    }
+
+    let finalAmount = subtotal;
+    if (subtotal < 5000) {
+      finalAmount += shippingCharge;
     }
 
     // Razorpay requires amount in minor units (paisa). So INR * 100
-    const amountInPaisa = Math.round(totalAmount * 100);
+    const amountInPaisa = Math.round(finalAmount * 100);
 
     const options = {
       amount: amountInPaisa,
@@ -113,6 +120,7 @@ exports.verifyPaymentSignature = async (req, res) => {
       pincode: orderData.pincode || "",
       landmark: orderData.landmark || "",
       amount: orderData.amount, // in INR
+      shippingCharge: orderData.shippingCharge || 0,
       status: "Processing", // Paid order starts as Processing
       paymentMethod: "Online Payment",
       paymentStatus: "Paid",
