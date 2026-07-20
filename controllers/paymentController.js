@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 const User = require("../models/User");
+const Settings = require("../models/Settings");
 
 // Initialize Razorpay
 // For testing purposes, we provide fallbacks if env vars are missing,
@@ -52,7 +53,12 @@ exports.createRazorpayOrder = async (req, res) => {
     }
 
     let finalAmount = subtotal;
-    if (subtotal < 5000) {
+    const settings = await Settings.findOne();
+    let threshold = settings && settings.freeShippingThreshold !== undefined ? settings.freeShippingThreshold : 999;
+    if (threshold === 5000) {
+      threshold = 999;
+    }
+    if (subtotal < threshold) {
       finalAmount += shippingCharge;
     }
 

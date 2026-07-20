@@ -20,7 +20,7 @@ const settingsSchema = new mongoose.Schema(
     },
     announcementBarText: {
       type: String,
-      default: "FREE SHIPPING ON ORDERS OVER ₹5,000"
+      default: "FREE SHIPPING ON ORDERS OVER ₹999"
     },
     announcementBarActive: {
       type: Boolean,
@@ -34,7 +34,7 @@ const settingsSchema = new mongoose.Schema(
         }
       ],
       default: [
-        { text: "FREE SHIPPING ON ORDERS OVER ₹5,000", active: true },
+        { text: "FREE SHIPPING ON ORDERS OVER ₹999", active: true },
         { text: "Free returns within 7 days", active: true },
         { text: "Premium Luxury Menswear Collection", active: true },
         { text: "Flat 20% Off On New Arrivals", active: true }
@@ -42,7 +42,7 @@ const settingsSchema = new mongoose.Schema(
     },
     freeShippingThreshold: {
       type: Number,
-      default: 5000
+      default: 999
     }
   },
   { timestamps: true }

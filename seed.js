@@ -280,15 +280,15 @@ const settingsData = {
   contactEmail: "contact@novemberxix.com",
   contactPhone: "+91 98765 43210",
   address: "12, Luxury Lane, Mumbai, India",
-  announcementBarText: "FREE SHIPPING ON ORDERS OVER ₹5,000",
+  announcementBarText: "FREE SHIPPING ON ORDERS OVER ₹999",
   announcementBarActive: true,
   announcements: [
-    { text: "FREE SHIPPING ON ORDERS OVER ₹5,000", active: true },
+    { text: "FREE SHIPPING ON ORDERS OVER ₹999", active: true },
     { text: "Free returns within 7 days", active: true },
     { text: "Premium Luxury Menswear Collection", active: true },
     { text: "Flat 20% Off On New Arrivals", active: true }
   ],
-  freeShippingThreshold: 5000
+  freeShippingThreshold: 999
 };
 
 const seedDB = async () => {
