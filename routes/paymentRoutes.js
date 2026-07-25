@@ -4,5 +4,7 @@ const paymentController = require("../controllers/paymentController");
 
 router.post("/create-order", paymentController.createRazorpayOrder);
 router.post("/verify", paymentController.verifyPaymentSignature);
+router.post("/verify-payment", paymentController.verifyPaymentSignature);
+
 
 module.exports = router;

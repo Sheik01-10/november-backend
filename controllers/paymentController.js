@@ -23,7 +23,7 @@ const razorpay = new Razorpay({
 // Create a Razorpay Order
 exports.createRazorpayOrder = async (req, res) => {
   try {
-    const { items, email } = req.body;
+    const { items, email, amount, currency: reqCurrency, receipt: reqReceipt } = req.body;
     if (!email) {
       return res.status(401).json({ message: "Unauthorized. Email is required to create a payment order." });
     }
@@ -33,48 +33,62 @@ exports.createRazorpayOrder = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized. You must have a registered account to create a payment order." });
     }
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: "Items array is required to calculate total" });
-    }
+    let amountInPaisa;
+    let currency = reqCurrency || "INR";
+    let receipt = reqReceipt || `receipt_order_${Date.now()}`;
 
-    // Securely calculate amount from database to prevent price tampering
-    let subtotal = 0;
-    let shippingCharge = 0;
-    for (const item of items) {
-      // Find product by id (the item has an 'id' field matching product._id)
-      const productId = item.id || item._id;
-      const product = await Product.findById(productId);
-      if (!product) {
-        return res.status(404).json({ message: `Product not found: ${item.name || productId}` });
+    if (amount !== undefined) {
+      amountInPaisa = Number(amount);
+    } else {
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: "Items array is required to calculate total" });
       }
-      subtotal += product.price * (item.quantity || 1);
-      const charge = product.deliveryCharge !== undefined ? product.deliveryCharge : 150;
-      shippingCharge += charge * (item.quantity || 1);
+
+      // Securely calculate amount from database to prevent price tampering
+      let subtotal = 0;
+      let shippingCharge = 0;
+      for (const item of items) {
+        // Find product by id (the item has an 'id' field matching product._id)
+        const productId = item.id || item._id;
+        const product = await Product.findById(productId);
+        if (!product) {
+          return res.status(404).json({ message: `Product not found: ${item.name || productId}` });
+        }
+        subtotal += product.price * (item.quantity || 1);
+        const charge = product.deliveryCharge !== undefined ? product.deliveryCharge : 150;
+        shippingCharge += charge * (item.quantity || 1);
+      }
+
+      let finalAmount = subtotal;
+      const settings = await Settings.findOne();
+      let threshold = settings && settings.freeShippingThreshold !== undefined ? settings.freeShippingThreshold : 999;
+      if (threshold === 5000) {
+        threshold = 999;
+      }
+      if (subtotal < threshold) {
+        finalAmount += shippingCharge;
+      }
+
+      // Razorpay requires amount in minor units (paisa). So INR * 100
+      amountInPaisa = Math.round(finalAmount * 100);
     }
 
-    let finalAmount = subtotal;
-    const settings = await Settings.findOne();
-    let threshold = settings && settings.freeShippingThreshold !== undefined ? settings.freeShippingThreshold : 999;
-    if (threshold === 5000) {
-      threshold = 999;
+    // Minimum amount validation: 100 paise
+    if (!amountInPaisa || isNaN(amountInPaisa) || amountInPaisa < 100) {
+      return res.status(400).json({ message: "Amount must be at least 100 paise (1 INR)" });
     }
-    if (subtotal < threshold) {
-      finalAmount += shippingCharge;
-    }
-
-    // Razorpay requires amount in minor units (paisa). So INR * 100
-    const amountInPaisa = Math.round(finalAmount * 100);
 
     const options = {
       amount: amountInPaisa,
-      currency: "INR",
-      receipt: `receipt_order_${Date.now()}`
+      currency: currency,
+      receipt: receipt
     };
 
     const rzpOrder = await razorpay.orders.create(options);
 
     res.status(200).json({
       id: rzpOrder.id,
+      order_id: rzpOrder.id,
       currency: rzpOrder.currency,
       amount: rzpOrder.amount,
       keyId: key_id
@@ -90,14 +104,8 @@ exports.verifyPaymentSignature = async (req, res) => {
   try {
     const { razorpay_payment_id, razorpay_order_id, razorpay_signature, orderData } = req.body;
 
-    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature || !orderData) {
+    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
       return res.status(400).json({ message: "Missing required payment verification details" });
-    }
-
-    // Verify user existence before creating the order
-    const user = await User.findOne({ email: orderData.customerEmail?.toLowerCase() });
-    if (!user) {
-      return res.status(401).json({ message: "Unauthorized. You must have a registered account to place an order." });
     }
 
     // Verify payment signature
@@ -108,6 +116,19 @@ exports.verifyPaymentSignature = async (req, res) => {
     if (generatedSignature !== razorpay_signature) {
       console.error("Invalid payment signature mismatch!");
       return res.status(400).json({ message: "Payment verification failed. Invalid signature." });
+    }
+
+    if (!orderData) {
+      return res.status(200).json({
+        success: true,
+        message: "Payment signature verified successfully"
+      });
+    }
+
+    // Verify user existence before creating the order
+    const user = await User.findOne({ email: orderData.customerEmail?.toLowerCase() });
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized. You must have a registered account to place an order." });
     }
 
     // Generate unique November Order ID

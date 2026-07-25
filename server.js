@@ -53,7 +53,10 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/payments", paymentRoutes);
+app.post("/api/create-order", require("./controllers/paymentController").createRazorpayOrder);
+app.post("/api/verify-payment", require("./controllers/paymentController").verifyPaymentSignature);
 app.use("/api/support", supportRoutes);
+
 
 app.get("/", (req, res) => {
   res.send("The November API Running with WebSockets Enabled");
