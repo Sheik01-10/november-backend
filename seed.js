@@ -276,7 +276,7 @@ const bannersData = [
 ];
 
 const settingsData = {
-  storeName: "November Menswear",
+  storeName: "The November Menswear",
   contactEmail: "contact@novemberxix.com",
   contactPhone: "+91 98765 43210",
   address: "12, Luxury Lane, Mumbai, India",

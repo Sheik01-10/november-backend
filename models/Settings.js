@@ -4,7 +4,7 @@ const settingsSchema = new mongoose.Schema(
   {
     storeName: {
       type: String,
-      default: "November Menswear"
+      default: "The November Menswear"
     },
     contactEmail: {
       type: String,

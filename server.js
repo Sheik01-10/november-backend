@@ -56,7 +56,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/support", supportRoutes);
 
 app.get("/", (req, res) => {
-  res.send("November API Running with WebSockets Enabled");
+  res.send("The November API Running with WebSockets Enabled");
 });
 
 io.on("connection", (socket) => {
