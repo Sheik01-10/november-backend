@@ -8,6 +8,10 @@ const orderSchema = new mongoose.Schema(
       unique: true,
       trim: true
     },
+    cfOrderId: {
+      type: String,
+      trim: true
+    },
     customerName: {
       type: String,
       required: true,

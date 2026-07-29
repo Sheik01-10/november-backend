@@ -1,29 +1,22 @@
-const Razorpay = require("razorpay");
-const crypto = require("crypto");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 const User = require("../models/User");
 const Settings = require("../models/Settings");
+const crypto = require("crypto");
 
-// Initialize Razorpay
-// For testing purposes, we provide fallbacks if env vars are missing,
-// but warn the developer.
-const key_id = process.env.RAZORPAY_KEY_ID || "";
-const key_secret = process.env.RAZORPAY_KEY_SECRET || "";
+// Initialize Cashfree Credentials
+const appId = process.env.CASHFREE_APP_ID || "";
+const secretKey = process.env.CASHFREE_SECRET_KEY || "";
+const cfMode = process.env.CASHFREE_MODE || "production";
 
-if (!key_id || !key_secret) {
-  console.warn("WARNING: Razorpay credentials are not fully configured in backend/.env!");
+if (!appId || !secretKey) {
+  console.warn("WARNING: Cashfree credentials are not fully configured in backend/.env!");
 }
 
-const razorpay = new Razorpay({
-  key_id: key_id,
-  key_secret: key_secret
-});
-
-// Create a Razorpay Order
-exports.createRazorpayOrder = async (req, res) => {
+// Create a Cashfree Order
+exports.createCashfreeOrder = async (req, res) => {
   try {
-    const { items, email, amount, currency: reqCurrency, receipt: reqReceipt } = req.body;
+    const { items, email, phone, customerName, amount, currency: reqCurrency } = req.body;
     if (!email) {
       return res.status(401).json({ message: "Unauthorized. Email is required to create a payment order." });
     }
@@ -33,12 +26,11 @@ exports.createRazorpayOrder = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized. You must have a registered account to create a payment order." });
     }
 
-    let amountInPaisa;
+    let finalAmountINR;
     let currency = reqCurrency || "INR";
-    let receipt = reqReceipt || `receipt_order_${Date.now()}`;
 
     if (amount !== undefined) {
-      amountInPaisa = Number(amount);
+      finalAmountINR = Number(amount);
     } else {
       if (!items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ message: "Items array is required to calculate total" });
@@ -48,7 +40,6 @@ exports.createRazorpayOrder = async (req, res) => {
       let subtotal = 0;
       let shippingCharge = 0;
       for (const item of items) {
-        // Find product by id (the item has an 'id' field matching product._id)
         const productId = item.id || item._id;
         const product = await Product.findById(productId);
         if (!product) {
@@ -59,69 +50,128 @@ exports.createRazorpayOrder = async (req, res) => {
         shippingCharge += charge * (item.quantity || 1);
       }
 
-      let finalAmount = subtotal;
+      let calculatedAmount = subtotal;
       const settings = await Settings.findOne();
       let threshold = settings && settings.freeShippingThreshold !== undefined ? settings.freeShippingThreshold : 999;
       if (threshold === 5000) {
         threshold = 999;
       }
       if (subtotal < threshold) {
-        finalAmount += shippingCharge;
+        calculatedAmount += shippingCharge;
       }
 
-      // Razorpay requires amount in minor units (paisa). So INR * 100
-      amountInPaisa = Math.round(finalAmount * 100);
+      finalAmountINR = calculatedAmount;
     }
 
-    // Minimum amount validation: 100 paise
-    if (!amountInPaisa || isNaN(amountInPaisa) || amountInPaisa < 100) {
-      return res.status(400).json({ message: "Amount must be at least 100 paise (1 INR)" });
+    if (!finalAmountINR || isNaN(finalAmountINR) || finalAmountINR < 1) {
+      return res.status(400).json({ message: "Amount must be at least 1 INR" });
     }
 
-    const options = {
-      amount: amountInPaisa,
-      currency: currency,
-      receipt: receipt
-    };
+    const orderId = `cf_order_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const customerId = user._id.toString();
+    const customerPhone = phone || user.phone || "9999999999";
+    const customerNameVal = customerName || user.name || "Customer";
 
-    const rzpOrder = await razorpay.orders.create(options);
+    const origin = req.headers.origin || "http://localhost:5173";
+    const returnUrl = `${origin}/checkout?cf_order_id={order_id}`;
+
+    const cfBaseUrl = "https://api.cashfree.com/pg/orders";
+
+    const response = await fetch(cfBaseUrl, {
+      method: "POST",
+      headers: {
+        "x-client-id": appId,
+        "x-client-secret": secretKey,
+        "x-api-version": "2023-08-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        order_amount: Number(finalAmountINR.toFixed(2)),
+        order_currency: currency,
+        order_id: orderId,
+        customer_details: {
+          customer_id: customerId,
+          customer_email: email.toLowerCase(),
+          customer_phone: customerPhone,
+          customer_name: customerNameVal
+        },
+        order_meta: {
+          return_url: returnUrl
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Cashfree API error:", errorText);
+      return res.status(400).json({ message: `Cashfree order creation failed: ${errorText}` });
+    }
+
+    const cfOrder = await response.json();
 
     res.status(200).json({
-      id: rzpOrder.id,
-      order_id: rzpOrder.id,
-      currency: rzpOrder.currency,
-      amount: rzpOrder.amount,
-      keyId: key_id
+      id: cfOrder.order_id,
+      order_id: cfOrder.order_id,
+      payment_session_id: cfOrder.payment_session_id,
+      currency: cfOrder.order_currency,
+      amount: cfOrder.order_amount
     });
   } catch (err) {
-    console.error("Razorpay order creation failed:", err);
+    console.error("Cashfree order creation failed:", err);
     res.status(500).json({ message: err.message || "Failed to create payment order" });
   }
 };
 
-// Verify Razorpay Payment Signature and Save Order
-exports.verifyPaymentSignature = async (req, res) => {
+// Verify Cashfree Payment and Save Order
+exports.verifyCashfreePayment = async (req, res) => {
   try {
-    const { razorpay_payment_id, razorpay_order_id, razorpay_signature, orderData } = req.body;
+    const { orderId, orderData } = req.body;
 
-    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-      return res.status(400).json({ message: "Missing required payment verification details" });
+    if (!orderId) {
+      return res.status(400).json({ message: "Missing required orderId" });
     }
 
-    // Verify payment signature
-    const hmac = crypto.createHmac("sha256", key_secret);
-    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
-    const generatedSignature = hmac.digest("hex");
+    const cfBaseUrl = "https://api.cashfree.com/pg/orders";
 
-    if (generatedSignature !== razorpay_signature) {
-      console.error("Invalid payment signature mismatch!");
-      return res.status(400).json({ message: "Payment verification failed. Invalid signature." });
+    const response = await fetch(`${cfBaseUrl}/${orderId}`, {
+      method: "GET",
+      headers: {
+        "x-client-id": appId,
+        "x-client-secret": secretKey,
+        "x-api-version": "2023-08-01",
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Cashfree status check failed:", errorText);
+      return res.status(400).json({ message: "Failed to verify payment status with Cashfree" });
+    }
+
+    const cfOrder = await response.json();
+
+    if (cfOrder.order_status !== "PAID") {
+      console.error(`Order status is not PAID. Current status: ${cfOrder.order_status}`);
+      return res.status(400).json({ message: `Payment verification failed. Cashfree Status: ${cfOrder.order_status}` });
     }
 
     if (!orderData) {
       return res.status(200).json({
         success: true,
-        message: "Payment signature verified successfully"
+        message: "Payment verified successfully",
+        orderStatus: cfOrder.order_status
+      });
+    }
+
+    // Check if order already exists to prevent duplicate creation
+    const existingOrder = await Order.findOne({ cfOrderId: orderId });
+    if (existingOrder) {
+      console.log(`[Verify] Order for Cashfree ID ${orderId} already exists in database: ${existingOrder.orderId}`);
+      return res.status(200).json({
+        success: true,
+        message: "Order placed and payment verified successfully",
+        order: existingOrder
       });
     }
 
@@ -138,6 +188,7 @@ exports.verifyPaymentSignature = async (req, res) => {
     // Create and save the order in MongoDB
     const newOrder = new Order({
       orderId: uniqueOrderId,
+      cfOrderId: orderId,
       customerName: orderData.customerName,
       customerEmail: orderData.customerEmail,
       customerPhoto: orderData.customerPhoto || "",
@@ -158,7 +209,7 @@ exports.verifyPaymentSignature = async (req, res) => {
 
     const savedOrder = await newOrder.save();
 
-    // Update User order history (user already found)
+    // Update User order history
     if (!user.orders) {
       user.orders = [];
     }
@@ -179,5 +230,82 @@ exports.verifyPaymentSignature = async (req, res) => {
   } catch (err) {
     console.error("Payment verification and order saving failed:", err);
     res.status(500).json({ message: err.message || "Failed to verify payment and place order" });
+  }
+};
+
+// Webhook handler for Cashfree payment status updates
+exports.handleCashfreeWebhook = async (req, res) => {
+  try {
+    const signature = req.headers["x-webhook-signature"];
+    const timestamp = req.headers["x-webhook-timestamp"];
+    const rawBody = req.rawBody;
+
+    if (!signature || !timestamp) {
+      console.warn("[Cashfree Webhook] Missing signature or timestamp headers");
+      return res.status(400).json({ message: "Missing verification headers" });
+    }
+
+    if (!rawBody) {
+      console.warn("[Cashfree Webhook] Raw body not available for signature verification");
+      return res.status(400).json({ message: "Raw body is required for verification" });
+    }
+
+    // Verify signature using the production client secret
+    const signedPayload = `${timestamp}${rawBody}`;
+    const expectedSignature = crypto
+      .createHmac("sha256", secretKey)
+      .update(signedPayload)
+      .digest("base64");
+
+    if (signature !== expectedSignature) {
+      console.error("[Cashfree Webhook] Invalid signature verification attempt");
+      return res.status(401).json({ message: "Invalid webhook signature" });
+    }
+
+    // Parse the validated payload
+    const payload = JSON.parse(rawBody);
+    console.log("[Cashfree Webhook] Verified payload received:", JSON.stringify(payload));
+
+    const { type, data } = payload;
+    
+    // We only handle payment success events
+    if (type === "PAYMENT_SUCCESS_WEBHOOK") {
+      const orderId = data.order?.order_id;
+      const cfPaymentId = data.payment?.cf_payment_id;
+
+      if (!orderId) {
+        console.warn("[Cashfree Webhook] No order ID found in webhook payload");
+        return res.status(400).json({ message: "Missing order ID in payload" });
+      }
+
+      console.log(`[Cashfree Webhook] Payment successful for Cashfree Order ID: ${orderId}, Payment ID: ${cfPaymentId}`);
+
+      // Look up the order in MongoDB
+      const order = await Order.findOne({ cfOrderId: orderId });
+
+      if (order) {
+        if (order.paymentStatus !== "Paid") {
+          order.paymentStatus = "Paid";
+          order.status = "Processing";
+          await order.save();
+          console.log(`[Cashfree Webhook] Order ${order.orderId} updated to Paid/Processing via Webhook`);
+
+          // Emit socket event for real-time admin updates
+          const io = req.app.get("io");
+          if (io) {
+            io.emit("order_changed", { action: "update", data: order });
+          }
+        } else {
+          console.log(`[Cashfree Webhook] Order ${order.orderId} is already marked as Paid`);
+        }
+      } else {
+        console.warn(`[Cashfree Webhook] Order with cfOrderId ${orderId} not found in database. The frontend might not have saved it yet.`);
+      }
+    }
+
+    res.status(200).json({ success: true, message: "Webhook processed successfully" });
+  } catch (err) {
+    console.error("[Cashfree Webhook] Error processing webhook:", err);
+    res.status(500).json({ message: err.message || "Failed to process webhook" });
   }
 };

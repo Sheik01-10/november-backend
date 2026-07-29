@@ -37,7 +37,11 @@ app.set("io", io);
 connectDB();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 
 // Static files for local uploads fallback
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -53,8 +57,8 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/payments", paymentRoutes);
-app.post("/api/create-order", require("./controllers/paymentController").createRazorpayOrder);
-app.post("/api/verify-payment", require("./controllers/paymentController").verifyPaymentSignature);
+app.post("/api/create-order", require("./controllers/paymentController").createCashfreeOrder);
+app.post("/api/verify-payment", require("./controllers/paymentController").verifyCashfreePayment);
 app.use("/api/support", supportRoutes);
 
 
