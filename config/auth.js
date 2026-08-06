@@ -46,7 +46,9 @@ const getAuthInstance = () => {
         "http://localhost:*",
         "http://127.0.0.1:*",
         "http://10.143.118.163:*",
-        "https://novemberxix.duckdns.org"
+        "https://novemberxix.duckdns.org",
+        "https://thenovember.in",
+        "http://thenovember.in"
       ]
     });
   }

@@ -39,7 +39,9 @@ connectDB();
 // Configure CORS with credentials support
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://novemberxix.duckdns.org"
+  "https://novemberxix.duckdns.org",
+  "https://thenovember.in",
+  "http://thenovember.in"
 ];
 
 app.use(cors({
