@@ -70,6 +70,10 @@ const orderSchema = new mongoose.Schema(
       enum: ["Pending", "Processing", "Shipped", "Completed", "Cancelled"],
       default: "Pending"
     },
+    cancellationReason: {
+      type: String,
+      default: ""
+    },
     paymentMethod: {
       type: String,
       enum: ["Cash on Delivery", "Online Payment"],

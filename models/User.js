@@ -2,10 +2,11 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
+    // Firebase UID is now optional and sparse to support Better Auth users natively
     uid: {
       type: String,
-      required: true,
       unique: true,
+      sparse: true,
       trim: true
     },
     name: {
@@ -25,6 +26,15 @@ const userSchema = new mongoose.Schema(
       default: ""
     },
     photo: {
+      type: String,
+      default: ""
+    },
+    // Better Auth fields
+    emailVerified: {
+      type: Boolean,
+      default: false
+    },
+    image: {
       type: String,
       default: ""
     },

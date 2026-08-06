@@ -1,4 +1,13 @@
 const User = require("../models/User");
+const mongoose = require("mongoose");
+
+// Helper to find a user by Firebase UID or MongoDB ObjectId (Better Auth id)
+const findUserByUidOrId = async (uid) => {
+  const query = mongoose.isValidObjectId(uid)
+    ? { $or: [{ _id: uid }, { uid: uid }] }
+    : { uid: uid };
+  return await User.findOne(query);
+};
 
 // Get all users (Customers list)
 exports.getUsers = async (req, res) => {
@@ -10,17 +19,25 @@ exports.getUsers = async (req, res) => {
   }
 };
 
-// Sync/Save user from Firebase
+// Sync/Save user from Firebase / Better Auth
 exports.syncUser = async (req, res) => {
   try {
     const { uid, name, email, phone, photo, isAdmin } = req.body;
     if (!uid || !email) {
-      return res.status(400).json({ message: "Firebase UID and email are required" });
+      return res.status(400).json({ message: "UID and email are required" });
     }
 
-    let user = await User.findOne({ uid });
+    let user = await User.findOne({
+      $or: [
+        { uid: uid },
+        { email: email.toLowerCase() },
+        ...(mongoose.isValidObjectId(uid) ? [{ _id: uid }] : [])
+      ]
+    });
+
     if (user) {
       // Update existing customer profile
+      user.uid = user.uid || uid;
       user.name = name || user.name;
       user.phone = phone || user.phone;
       user.photo = photo || user.photo;
@@ -36,7 +53,7 @@ exports.syncUser = async (req, res) => {
       return res.json(updatedUser);
     } else {
       // Create new customer profile
-      user = new User({ uid, name, email, phone, photo, isAdmin: isAdmin || false });
+      user = new User({ uid, name, email: email.toLowerCase(), phone, photo, isAdmin: isAdmin || false });
       const newUser = await user.save();
 
       // Emit socket event
@@ -86,10 +103,10 @@ exports.checkEmail = async (req, res) => {
   }
 };
 
-// Get detailed user profile by Firebase UID
+// Get detailed user profile by Firebase UID or Better Auth ID
 exports.getUserProfile = async (req, res) => {
   try {
-    const user = await User.findOne({ uid: req.params.uid });
+    const user = await findUserByUidOrId(req.params.uid);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -103,7 +120,7 @@ exports.getUserProfile = async (req, res) => {
 exports.updateUserProfile = async (req, res) => {
   try {
     const { name, phone, photo } = req.body;
-    const user = await User.findOne({ uid: req.params.uid });
+    const user = await findUserByUidOrId(req.params.uid);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -130,7 +147,7 @@ exports.updateUserProfile = async (req, res) => {
 exports.addUserAddress = async (req, res) => {
   try {
     const { name, phone, street, city, state, pincode, landmark, isDefault } = req.body;
-    const user = await User.findOne({ uid: req.params.uid });
+    const user = await findUserByUidOrId(req.params.uid);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -167,7 +184,7 @@ exports.addUserAddress = async (req, res) => {
 exports.updateUserAddress = async (req, res) => {
   try {
     const { name, phone, street, city, state, pincode, landmark, isDefault } = req.body;
-    const user = await User.findOne({ uid: req.params.uid });
+    const user = await findUserByUidOrId(req.params.uid);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -205,7 +222,7 @@ exports.updateUserAddress = async (req, res) => {
 // Delete address
 exports.deleteUserAddress = async (req, res) => {
   try {
-    const user = await User.findOne({ uid: req.params.uid });
+    const user = await findUserByUidOrId(req.params.uid);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -233,7 +250,7 @@ exports.deleteUserAddress = async (req, res) => {
 // Set default address
 exports.setDefaultAddress = async (req, res) => {
   try {
-    const user = await User.findOne({ uid: req.params.uid });
+    const user = await findUserByUidOrId(req.params.uid);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }

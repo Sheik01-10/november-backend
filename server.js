@@ -36,12 +36,48 @@ app.set("io", io);
 
 connectDB();
 
-app.use(cors());
+// Configure CORS with credentials support
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://novemberxix.duckdns.org"
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const isLocal = origin.startsWith("http://localhost:") || 
+                    origin.startsWith("http://127.0.0.1:") || 
+                    origin.startsWith("http://10.") || 
+                    origin.startsWith("http://192.168.");
+    if (isLocal || allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    const msg = "The CORS policy for this site does not allow access from the specified Origin.";
+    return callback(new Error(msg), false);
+  },
+  credentials: true
+}));
+
 app.use(express.json({
   verify: (req, res, buf) => {
     req.rawBody = buf.toString();
   }
 }));
+
+// Better Auth API route handler
+const { toNodeHandler } = require("better-auth/node");
+const mongoose = require("mongoose");
+app.all("/api/auth/*splat", (req, res, next) => {
+  if (mongoose.connection.readyState === 2) {
+    mongoose.connection.once("connected", () => {
+      const { getAuthInstance } = require("./config/auth");
+      toNodeHandler(getAuthInstance())(req, res, next);
+    });
+  } else {
+    const { getAuthInstance } = require("./config/auth");
+    toNodeHandler(getAuthInstance())(req, res, next);
+  }
+});
 
 // Static files for local uploads fallback
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));

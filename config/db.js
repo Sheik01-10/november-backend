@@ -2,9 +2,12 @@ const mongoose = require("mongoose");
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(
-      process.env.MONGO_URI
-    );
+    let mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/november";
+    if (!mongoUri.includes("retryWrites=")) {
+      const separator = mongoUri.includes("?") ? "&" : "?";
+      mongoUri = `${mongoUri}${separator}retryWrites=false`;
+    }
+    await mongoose.connect(mongoUri);
 
     console.log(
       "MongoDB Connected"

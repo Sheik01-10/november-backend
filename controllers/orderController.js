@@ -63,6 +63,7 @@ exports.updateOrderStatus = async (req, res) => {
     if (req.body.status) order.status = req.body.status;
     if (req.body.paymentStatus) order.paymentStatus = req.body.paymentStatus;
     if (req.body.paymentMethod) order.paymentMethod = req.body.paymentMethod;
+    if (req.body.cancellationReason !== undefined) order.cancellationReason = req.body.cancellationReason;
     const updatedOrder = await order.save();
 
     // Emit socket event
