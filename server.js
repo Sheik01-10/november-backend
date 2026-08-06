@@ -67,7 +67,7 @@ app.use(express.json({
 // Better Auth API route handler
 const { toNodeHandler } = require("better-auth/node");
 const mongoose = require("mongoose");
-app.all("/api/auth/*splat", (req, res, next) => {
+app.all(/^\/api\/auth\/(.*)/, (req, res, next) => {
   if (mongoose.connection.readyState === 2) {
     mongoose.connection.once("connected", () => {
       const { getAuthInstance } = require("./config/auth");
