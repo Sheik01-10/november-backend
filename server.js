@@ -51,7 +51,10 @@ app.use(cors({
                     origin.startsWith("http://127.0.0.1:") || 
                     origin.startsWith("http://10.") || 
                     origin.startsWith("http://192.168.");
-    if (isLocal || allowedOrigins.indexOf(origin) !== -1) {
+    const isDomain = origin.endsWith(".thenovember.in") || 
+                     origin === "https://thenovember.in" || 
+                     origin === "http://thenovember.in";
+    if (isLocal || isDomain || allowedOrigins.indexOf(origin) !== -1) {
       return callback(null, true);
     }
     const msg = "The CORS policy for this site does not allow access from the specified Origin.";
