@@ -497,3 +497,23 @@ exports.getStaffActivity = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// Get currently authenticated user details
+exports.getMe = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized: No active session" });
+    }
+    res.json({
+      user: {
+        id: req.user.id || req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+        isAdmin: req.user.isAdmin
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

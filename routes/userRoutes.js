@@ -34,6 +34,7 @@ router.delete("/:id", userController.deleteUser);
 // Login and Logout success tracking endpoints
 router.post("/login-success", authMiddleware, userController.loginSuccess);
 router.post("/logout-success", authMiddleware, userController.logoutSuccess);
+router.get("/me", authMiddleware, userController.getMe);
 
 // Staff management endpoints (Admin only)
 router.get("/staff", authMiddleware, authMiddleware.requireAdmin, userController.getStaff);
