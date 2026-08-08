@@ -13,6 +13,21 @@ const connectDB = async () => {
       "MongoDB Connected"
     );
 
+    // Clean up non-sparse uid_1 index if it exists, to allow multiple users without a uid
+    try {
+      const db = mongoose.connection.db;
+      const usersCol = db.collection("users");
+      const indexes = await usersCol.indexes();
+      const uidIndex = indexes.find(idx => idx.name === "uid_1");
+      if (uidIndex && !uidIndex.sparse) {
+        console.log("Detected non-sparse uid_1 index. Dropping index for sparse re-creation...");
+        await usersCol.dropIndex("uid_1");
+        console.log("Successfully dropped non-sparse uid_1 index.");
+      }
+    } catch (indexErr) {
+      console.warn("Index migration check skipped/failed:", indexErr.message);
+    }
+
     // Seed default admin user if it does not exist
     try {
       const User = require("../models/User");
