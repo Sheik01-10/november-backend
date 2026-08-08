@@ -277,174 +277,83 @@ exports.trackVisitor = async (req, res) => {
   }
 };
 
-// GET: Fetch detailed visitor insights
+// GET: Fetch detailed customer order district insights
 exports.getVisitorStats = async (req, res) => {
   try {
-    // Run data cleanup / migration check
-    await ensureVisitorData();
-
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const sessions = await VisitorSession.find({
-      createdAt: { $gte: thirtyDaysAgo }
-    }).sort({ updatedAt: -1 });
-
-    const totalSessionsCount = sessions.length;
-
-    // Unique Visitors (by deviceId)
-    const uniqueDevices = new Set(sessions.map(s => s.deviceId));
-    const uniqueVisitorsCount = uniqueDevices.size;
-
-    // Pageviews Count
-    let totalPageviews = 0;
-    sessions.forEach(s => {
-      totalPageviews += s.pagesVisited.length;
-    });
-
-    // Active Online (updated in the last 5 minutes)
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    const activeOnlineCount = await VisitorSession.countDocuments({
-      updatedAt: { $gte: fiveMinutesAgo }
-    });
-    // Strict real-time visitor count, no mock baseline fallbacks
-    const finalActiveOnline = activeOnlineCount;
-
-    // Average Duration
-    let totalDuration = 0;
-    sessions.forEach(s => {
-      totalDuration += s.duration;
-    });
-    const avgDuration = totalSessionsCount > 0 ? Math.round(totalDuration / totalSessionsCount) : 0;
-
-    // Bounce Rate (Only 1 page visited)
-    const bounces = sessions.filter(s => s.pagesVisited.length === 1).length;
-    const bounceRate = totalSessionsCount > 0 ? Math.round((bounces / totalSessionsCount) * 100) : 0;
-
-    // Geographic distribution
-    const stateMap = {};
-    const districtMap = {};
-    sessions.forEach(s => {
-      stateMap[s.state] = (stateMap[s.state] || 0) + 1;
-      const distKey = `${s.district}, ${s.state}`;
-      districtMap[distKey] = (districtMap[distKey] || 0) + 1;
-    });
-
-    const stateData = Object.keys(stateMap).map(k => ({ name: k, value: stateMap[k] }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-
-    const districtData = Object.keys(districtMap).map(k => {
-      const parts = k.split(", ");
-      return { district: parts[0], state: parts[1], value: districtMap[k] };
-    })
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-
-    // Gender Demographics
-    let maleCount = 0;
-    let femaleCount = 0;
-    sessions.forEach(s => {
-      if (s.gender === "Male") maleCount++;
-      else if (s.gender === "Female") femaleCount++;
-    });
-    const genderData = [
-      { name: "Male", value: maleCount },
-      { name: "Female", value: femaleCount }
-    ];
-
-    // Traffic Sources
-    const sourceMap = { "Direct": 0, "Organic Search": 0, "Social Media": 0, "Referral": 0 };
-    sessions.forEach(s => {
-      sourceMap[s.trafficSource] = (sourceMap[s.trafficSource] || 0) + 1;
-    });
-    const sourceData = Object.keys(sourceMap).map(k => ({ name: k, value: sourceMap[k] }));
-
-    // Device Types
-    const deviceMap = { "Desktop": 0, "Mobile": 0, "Tablet": 0 };
-    sessions.forEach(s => {
-      deviceMap[s.deviceType] = (deviceMap[s.deviceType] || 0) + 1;
-    });
-    const deviceData = Object.keys(deviceMap).map(k => ({ name: k, value: deviceMap[k] }));
-
-    // Page Hits count
-    const pageHitsMap = {};
-    sessions.forEach(s => {
-      s.pagesVisited.forEach(p => {
-        let cleanPath = p.path;
-        if (cleanPath.startsWith("/product/")) cleanPath = "/product/:id";
-        pageHitsMap[cleanPath] = (pageHitsMap[cleanPath] || 0) + 1;
-      });
-    });
-    const pageHitsData = Object.keys(pageHitsMap).map(k => ({ name: k, count: pageHitsMap[k] }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    // Daily Traffic Trend for charts
-    const dailyMap = {};
+    const { range } = req.query;
+    let dateFilter = {};
     const now = new Date();
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      dailyMap[dateStr] = { visitors: 0, pageviews: 0 };
+
+    if (range === "today") {
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      dateFilter = { date: { $gte: startOfToday } };
+    } else if (range === "7days") {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      dateFilter = { date: { $gte: sevenDaysAgo } };
+    } else if (range === "30days") {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      dateFilter = { date: { $gte: thirtyDaysAgo } };
+    } else if (range === "year") {
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      dateFilter = { date: { $gte: startOfYear } };
     }
 
-    sessions.forEach(s => {
-      const dateStr = new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      if (dailyMap[dateStr]) {
-        dailyMap[dateStr].visitors += 1;
-        dailyMap[dateStr].pageviews += s.pagesVisited.length;
+    const orders = await Order.find(dateFilter);
+    const totalOrders = orders.length;
+
+    const districtCounts = {};
+    orders.forEach(order => {
+      let district = order.district;
+      if (!district || !district.trim()) {
+        district = "District Not Provided";
+      } else {
+        district = district.trim();
+        // Capitalize words nicely (e.g. "coimbatore" -> "Coimbatore", "new delhi" -> "New Delhi")
+        district = district
+          .split(" ")
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(" ");
+      }
+      districtCounts[district] = (districtCounts[district] || 0) + 1;
+    });
+
+    // Count unique districts (excluding "District Not Provided")
+    const districtsKeys = Object.keys(districtCounts).filter(d => d !== "District Not Provided");
+    const districtsCovered = districtsKeys.length;
+
+    // Find top district
+    let topDistrict = "N/A";
+    let topDistrictOrders = 0;
+    Object.entries(districtCounts).forEach(([dist, count]) => {
+      if (dist !== "District Not Provided" && count > topDistrictOrders) {
+        topDistrict = dist;
+        topDistrictOrders = count;
       }
     });
 
-    const dailyTrendData = Object.keys(dailyMap).map(k => ({
-      name: k,
-      visitors: dailyMap[k].visitors,
-      pageviews: dailyMap[k].pageviews
-    }));
-
-    // Hourly Trend
-    const hourlyMap = {};
-    for (let h = 0; h < 24; h++) {
-      const hourStr = `${h.toString().padStart(2, "0")}:00`;
-      hourlyMap[hourStr] = { visitors: 0, pageviews: 0 };
+    if (topDistrict === "N/A" && districtCounts["District Not Provided"] > 0) {
+      topDistrict = "District Not Provided";
+      topDistrictOrders = districtCounts["District Not Provided"];
     }
-    sessions.forEach(s => {
-      const hour = new Date(s.createdAt).getHours();
-      const hourStr = `${hour.toString().padStart(2, "0")}:00`;
-      if (hourlyMap[hourStr]) {
-        hourlyMap[hourStr].visitors += 1;
-        hourlyMap[hourStr].pageviews += s.pagesVisited.length;
-      }
-    });
-    const hourlyTrendData = Object.keys(hourlyMap).map(k => ({
-      name: k,
-      visitors: hourlyMap[k].visitors,
-      pageviews: hourlyMap[k].pageviews
-    }));
+
+    // Prepare distribution array, sorted from highest order count to lowest
+    const distribution = Object.entries(districtCounts).map(([district, count]) => {
+      const percentage = totalOrders > 0 ? Math.round((count / totalOrders) * 100) : 0;
+      return {
+        district,
+        orders: count,
+        percentage
+      };
+    }).sort((a, b) => b.orders - a.orders);
 
     res.json({
-      kpis: {
-        uniqueVisitors: uniqueVisitorsCount,
-        totalPageviews,
-        activeOnline: finalActiveOnline,
-        avgDuration,
-        bounceRate
-      },
-      trends: {
-        daily: dailyTrendData,
-        hourly: hourlyTrendData
-      },
-      demographics: genderData,
-      locations: {
-        states: stateData,
-        districts: districtData
-      },
-      sources: sourceData,
-      devices: deviceData,
-      topPages: pageHitsData,
-      sessions: sessions.slice(0, 100) // Return recent 100 sessions
+      totalOrders,
+      districtsCovered,
+      topDistrict,
+      topDistrictOrders,
+      distribution
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

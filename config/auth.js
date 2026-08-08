@@ -34,7 +34,8 @@ const getAuthInstance = () => {
     authInstance = betterAuth({
       database: mongodbAdapter(betterAuthDb, {
         client: betterAuthClient,
-        usePlural: true
+        usePlural: true,
+        transaction: false
       }),
       emailAndPassword: {
         enabled: true,

@@ -195,6 +195,7 @@ exports.verifyCashfreePayment = async (req, res) => {
       phone: orderData.phone || "",
       address: orderData.address || "",
       city: orderData.city || "",
+      district: orderData.district || "",
       state: orderData.state || "",
       pincode: orderData.pincode || "",
       landmark: orderData.landmark || "",
