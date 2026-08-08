@@ -21,4 +21,44 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
+const requireAdmin = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized: No active session" });
+    }
+    const User = require("../models/User");
+    const user = await User.findOne({ email: req.user.email.toLowerCase() });
+    if (!user || (user.role !== "admin" && !user.isAdmin)) {
+      return res.status(403).json({ message: "Forbidden: Admins only" });
+    }
+    req.dbUser = user;
+    next();
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const requireStaff = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized: No active session" });
+    }
+    const User = require("../models/User");
+    const user = await User.findOne({ email: req.user.email.toLowerCase() });
+    if (!user || (user.role !== "staff" && user.role !== "admin" && !user.isAdmin)) {
+      return res.status(403).json({ message: "Forbidden: Staff or Admins only" });
+    }
+    if (user.role === "staff" && !user.isActive) {
+      return res.status(403).json({ message: "Forbidden: Staff account is deactivated" });
+    }
+    req.dbUser = user;
+    next();
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+authMiddleware.requireAdmin = requireAdmin;
+authMiddleware.requireStaff = requireStaff;
+
 module.exports = authMiddleware;

@@ -20,6 +20,7 @@ const analyticsRoutes = require("./routes/analyticsRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const supportRoutes = require("./routes/supportRoutes");
+const staffRoutes = require("./routes/staffRoutes");
 
 const app = express();
 const server = http.createServer(app);
@@ -101,6 +102,7 @@ app.use("/api/payments", paymentRoutes);
 app.post("/api/create-order", require("./controllers/paymentController").createCashfreeOrder);
 app.post("/api/verify-payment", require("./controllers/paymentController").verifyCashfreePayment);
 app.use("/api/support", supportRoutes);
+app.use("/api/staff", staffRoutes);
 
 
 app.get("/", (req, res) => {
@@ -113,6 +115,49 @@ io.on("connection", (socket) => {
     console.log("Client disconnected:", socket.id);
   });
 });
+
+// Background cleaner to set inactive staff offline (heartbeat timeout)
+setInterval(async () => {
+  try {
+    const User = require("./models/User");
+    const StaffLoginActivity = require("./models/StaffLoginActivity");
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+
+    const inactiveStaff = await User.find({
+      role: "staff",
+      onlineStatus: "online",
+      lastActiveAt: { $lt: twoMinutesAgo }
+    });
+
+    for (const staff of inactiveStaff) {
+      staff.onlineStatus = "offline";
+      staff.lastLogoutAt = staff.lastActiveAt || new Date();
+      await staff.save();
+
+      const latestActivity = await StaffLoginActivity.findOne({
+        userId: staff._id,
+        status: "online"
+      }).sort({ loginAt: -1 });
+
+      if (latestActivity) {
+        latestActivity.status = "offline";
+        latestActivity.logoutAt = staff.lastActiveAt || new Date();
+        await latestActivity.save();
+      }
+
+      console.log(`Auto-marked inactive staff ${staff.email} offline.`);
+    }
+
+    if (inactiveStaff.length > 0) {
+      const ioInstance = app.get("io");
+      if (ioInstance) {
+        ioInstance.emit("staff_changed", { action: "heartbeat_timeout" });
+      }
+    }
+  } catch (err) {
+    console.error("Heartbeat clean-up check failed:", err.message);
+  }
+}, 60000); // Check every 60 seconds
 
 const PORT = process.env.PORT || 5000;
 

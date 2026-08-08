@@ -275,3 +275,225 @@ exports.setDefaultAddress = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// Login success handler
+exports.loginSuccess = async (req, res) => {
+  try {
+    const StaffLoginActivity = require("../models/StaffLoginActivity");
+    const user = await User.findOne({ email: req.user.email.toLowerCase() });
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.role !== "admin" && user.role !== "staff" && !user.isAdmin) {
+      return res.status(403).json({ message: "Access Denied: Authorized Personnel Only" });
+    }
+
+    if (user.role === "staff" && !user.isActive) {
+      return res.status(403).json({ message: "Access Denied: Account is deactivated" });
+    }
+
+    // Update login status and timestamps
+    user.lastLoginAt = new Date();
+    user.lastActiveAt = new Date();
+    user.onlineStatus = "online";
+    user.loginCount = (user.loginCount || 0) + 1;
+    await user.save();
+
+    // If staff, create a login activity record
+    if (user.role === "staff") {
+      const loginActivity = new StaffLoginActivity({
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        loginAt: new Date(),
+        status: "online"
+      });
+      await loginActivity.save();
+    }
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("staff_changed", { action: "login", userId: user._id });
+    }
+
+    res.json({
+      success: true,
+      role: user.role,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isAdmin: user.isAdmin
+      }
+    });
+  } catch (err) {
+    console.error("Login Success Error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Logout success handler
+exports.logoutSuccess = async (req, res) => {
+  try {
+    const StaffLoginActivity = require("../models/StaffLoginActivity");
+    const user = await User.findOne({ email: req.user.email.toLowerCase() });
+
+    if (user) {
+      user.onlineStatus = "offline";
+      user.lastLogoutAt = new Date();
+      await user.save();
+
+      if (user.role === "staff") {
+        const latestActivity = await StaffLoginActivity.findOne({
+          userId: user._id,
+          status: "online"
+        }).sort({ loginAt: -1 });
+
+        if (latestActivity) {
+          latestActivity.status = "offline";
+          latestActivity.logoutAt = new Date();
+          await latestActivity.save();
+        }
+      }
+
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("staff_changed", { action: "logout", userId: user._id });
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Logout Success Error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Get all staff users (Admin only)
+exports.getStaff = async (req, res) => {
+  try {
+    const staffMembers = await User.find({ role: "staff" }).sort({ createdAt: -1 });
+    res.json(staffMembers);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Create new staff account (Admin only)
+exports.createStaff = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email, and password are required" });
+    }
+
+    // Call Better Auth to create the user account
+    const { getAuthInstance } = require("../config/auth");
+    const auth = getAuthInstance();
+
+    const signUpResult = await auth.api.signUpEmail({
+      body: {
+        email,
+        password,
+        name
+      }
+    });
+
+    if (!signUpResult || !signUpResult.user) {
+      return res.status(400).json({ message: "Failed to create Better Auth credentials" });
+    }
+
+    // Update role to staff
+    const user = await User.findById(signUpResult.user.id);
+    if (!user) {
+      return res.status(400).json({ message: "Failed to locate database record" });
+    }
+
+    user.role = "staff";
+    user.isActive = true;
+    await user.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("staff_changed", { action: "create", data: user });
+    }
+
+    res.status(201).json(user);
+  } catch (err) {
+    console.error("Create staff error:", err);
+    res.status(400).json({ message: err.message });
+  }
+};
+
+// Toggle staff active/inactive status (Admin only)
+exports.toggleStaffStatus = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user || user.role !== "staff") {
+      return res.status(404).json({ message: "Staff user not found" });
+    }
+
+    user.isActive = !user.isActive;
+    // If deactivating, also force them offline
+    if (!user.isActive) {
+      user.onlineStatus = "offline";
+      const StaffLoginActivity = require("../models/StaffLoginActivity");
+      const latestActivity = await StaffLoginActivity.findOne({
+        userId: user._id,
+        status: "online"
+      }).sort({ loginAt: -1 });
+
+      if (latestActivity) {
+        latestActivity.status = "offline";
+        latestActivity.logoutAt = new Date();
+        await latestActivity.save();
+      }
+    }
+    
+    await user.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("staff_changed", { action: "update", data: user });
+    }
+
+    res.json(user);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+// Delete staff user (Admin only)
+exports.deleteStaff = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user || user.role !== "staff") {
+      return res.status(404).json({ message: "Staff user not found" });
+    }
+
+    await user.deleteOne();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("staff_changed", { action: "delete", data: { _id: req.params.id } });
+    }
+
+    res.json({ message: "Staff account deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Get login activity log (Admin only)
+exports.getStaffActivity = async (req, res) => {
+  try {
+    const StaffLoginActivity = require("../models/StaffLoginActivity");
+    const activity = await StaffLoginActivity.find().sort({ loginAt: -1 });
+    res.json(activity);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

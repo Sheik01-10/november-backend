@@ -13,6 +13,44 @@ const connectDB = async () => {
       "MongoDB Connected"
     );
 
+    // Seed default admin user if it does not exist
+    try {
+      const User = require("../models/User");
+      const adminEmail = "admin@thenovember.in";
+      const adminPassword = "November@123";
+      
+      const adminUser = await User.findOne({ email: adminEmail });
+      if (!adminUser) {
+        console.log("Seeding default admin user...");
+        const { getAuthInstance } = require("./auth");
+        const auth = getAuthInstance();
+        const signUpResult = await auth.api.signUpEmail({
+          body: {
+            email: adminEmail,
+            password: adminPassword,
+            name: "Admin November"
+          }
+        });
+        
+        const seeded = await User.findById(signUpResult.user.id);
+        if (seeded) {
+          seeded.role = "admin";
+          seeded.isAdmin = true;
+          await seeded.save();
+        }
+        console.log("Admin user seeded successfully!");
+      } else {
+        if (adminUser.role !== "admin" || !adminUser.isAdmin) {
+          adminUser.role = "admin";
+          adminUser.isAdmin = true;
+          await adminUser.save();
+          console.log("Updated admin user role to admin");
+        }
+      }
+    } catch (seedErr) {
+      console.error("Admin seeding failed:", seedErr.message);
+    }
+
     // Auto-migration for free shipping threshold
     try {
       const Settings = require("../models/Settings");

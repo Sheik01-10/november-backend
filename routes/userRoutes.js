@@ -31,6 +31,17 @@ router.get("/check-email", userController.checkEmail);
 router.post("/sync", userController.syncUser);
 router.delete("/:id", userController.deleteUser);
 
+// Login and Logout success tracking endpoints
+router.post("/login-success", authMiddleware, userController.loginSuccess);
+router.post("/logout-success", authMiddleware, userController.logoutSuccess);
+
+// Staff management endpoints (Admin only)
+router.get("/staff", authMiddleware, authMiddleware.requireAdmin, userController.getStaff);
+router.post("/staff", authMiddleware, authMiddleware.requireAdmin, userController.createStaff);
+router.put("/staff/:id/toggle", authMiddleware, authMiddleware.requireAdmin, userController.toggleStaffStatus);
+router.delete("/staff/:id", authMiddleware, authMiddleware.requireAdmin, userController.deleteStaff);
+router.get("/staff/activity", authMiddleware, authMiddleware.requireAdmin, userController.getStaffActivity);
+
 // Profile and Address routes (Protected by session & owner validation)
 router.get("/profile/:uid", authMiddleware, profileOwnerMiddleware, userController.getUserProfile);
 router.put("/profile/:uid", authMiddleware, profileOwnerMiddleware, userController.updateUserProfile);

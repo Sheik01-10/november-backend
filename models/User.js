@@ -42,6 +42,33 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    role: {
+      type: String,
+      enum: ["customer", "admin", "staff"],
+      default: "customer"
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    },
+    lastLoginAt: {
+      type: Date
+    },
+    lastLogoutAt: {
+      type: Date
+    },
+    lastActiveAt: {
+      type: Date
+    },
+    loginCount: {
+      type: Number,
+      default: 0
+    },
+    onlineStatus: {
+      type: String,
+      enum: ["online", "offline"],
+      default: "offline"
+    },
     orders: [
       {
         type: mongoose.Schema.Types.ObjectId,

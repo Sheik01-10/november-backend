@@ -41,6 +41,35 @@ const getAuthInstance = () => {
         enabled: true,
         minPasswordLength: 6
       },
+      user: {
+        additionalFields: {
+          role: {
+            type: "string",
+            defaultValue: "customer"
+          },
+          isActive: {
+            type: "boolean",
+            defaultValue: true
+          },
+          lastLoginAt: {
+            type: "date"
+          },
+          lastLogoutAt: {
+            type: "date"
+          },
+          lastActiveAt: {
+            type: "date"
+          },
+          loginCount: {
+            type: "number",
+            defaultValue: 0
+          },
+          onlineStatus: {
+            type: "string",
+            defaultValue: "offline"
+          }
+        }
+      },
       account: {
         accountLinking: {
           enabled: true,
