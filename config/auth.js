@@ -36,6 +36,17 @@ const getAuthInstance = () => {
         client: betterAuthClient,
         usePlural: true
       }),
+      emailAndPassword: {
+        enabled: true,
+        minPasswordLength: 6
+      },
+      account: {
+        accountLinking: {
+          enabled: true,
+          trustedProviders: ["google"],
+          requireLocalEmailVerified: false
+        }
+      },
       socialProviders: {
         google: {
           clientId: process.env.GOOGLE_CLIENT_ID,
@@ -48,7 +59,9 @@ const getAuthInstance = () => {
         "http://10.143.118.163:*",
         "https://novemberxix.duckdns.org",
         "https://thenovember.in",
-        "http://thenovember.in"
+        "http://thenovember.in",
+        "https://*.thenovember.in",
+        "http://*.thenovember.in"
       ]
     });
   }
