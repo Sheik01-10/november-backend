@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const { getAuthInstance } = require("../config/auth");
 const { fromNodeHeaders } = require("better-auth/node");
 
