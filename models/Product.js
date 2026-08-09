@@ -25,6 +25,11 @@ const productSchema = new mongoose.Schema(
       default: 0,
     },
 
+    purchasePrice: {
+      type: Number,
+      default: 0,
+    },
+
     pct: {
       type: String,
       default: "",

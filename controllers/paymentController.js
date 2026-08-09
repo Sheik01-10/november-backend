@@ -185,6 +185,18 @@ exports.verifyCashfreePayment = async (req, res) => {
     const count = await Order.countDocuments();
     const uniqueOrderId = `ORD-${1000 + count + 1}`;
 
+    // Populate purchasePrice from database
+    const populatedItems = [];
+    if (orderData.items && Array.isArray(orderData.items)) {
+      for (const item of orderData.items) {
+        const prod = await Product.findOne({ name: item.name });
+        populatedItems.push({
+          ...item,
+          purchasePrice: prod ? (prod.purchasePrice || 0) : 0
+        });
+      }
+    }
+
     // Create and save the order in MongoDB
     const newOrder = new Order({
       orderId: uniqueOrderId,
@@ -204,7 +216,7 @@ exports.verifyCashfreePayment = async (req, res) => {
       status: "Processing", // Paid order starts as Processing
       paymentMethod: "Online Payment",
       paymentStatus: "Paid",
-      items: orderData.items,
+      items: populatedItems,
       date: new Date()
     });
 

@@ -308,8 +308,12 @@ const seedDB = async () => {
     await Category.insertMany(categoriesData);
     console.log("Categories seeded successfully.");
 
-    // Insert products
-    await Product.insertMany(productsData);
+    // Insert products with calculated purchasePrice
+    const productsToSeed = productsData.map(prod => ({
+      ...prod,
+      purchasePrice: prod.purchasePrice || Math.round(prod.price * 0.6)
+    }));
+    await Product.insertMany(productsToSeed);
     console.log("Products seeded successfully.");
 
     // Insert banners

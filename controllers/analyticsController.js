@@ -139,6 +139,41 @@ exports.getDashboardStats = async (req, res) => {
       { $group: { _id: null, total: { $sum: "$amount" } } }
     ]);
     const totalRevenue = revenueResult[0]?.total || 0;
+    const totalSales = totalRevenue;
+
+    // Calculate total purchase cost of items sold
+    const activeOrders = await Order.find({
+      status: { $in: ["Completed", "Processing", "Shipped"] }
+    });
+
+    const productsList = await Product.find({});
+    const productMap = {};
+    productsList.forEach(p => {
+      productMap[p.name.toLowerCase().trim()] = p;
+    });
+
+    let totalPurchaseCost = 0;
+    activeOrders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          const qty = item.quantity || 1;
+          let cost = item.purchasePrice;
+          
+          if (cost === undefined || cost === null || cost === 0) {
+            const prod = productMap[item.name.toLowerCase().trim()];
+            if (prod && prod.purchasePrice) {
+              cost = prod.purchasePrice;
+            } else {
+              cost = Math.round(item.price * 0.6); // 60% fallback
+            }
+          }
+          
+          totalPurchaseCost += cost * qty;
+        });
+      }
+    });
+
+    const totalProfit = totalSales - totalPurchaseCost;
 
     const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
     const conversionRate = 2.4; // Typical e-commerce conversion rate benchmark
@@ -171,6 +206,9 @@ exports.getDashboardStats = async (req, res) => {
     res.json({
       stats: {
         totalRevenue,
+        totalSales,
+        totalPurchaseCost,
+        totalProfit,
         totalOrders,
         totalProducts,
         totalCustomers,

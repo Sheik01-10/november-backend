@@ -28,8 +28,21 @@ exports.createOrder = async (req, res) => {
     const count = await Order.countDocuments();
     const orderId = `ORD-${1000 + count + 1}`;
 
+    const Product = require("../models/Product");
+    const populatedItems = [];
+    if (req.body.items && Array.isArray(req.body.items)) {
+      for (const item of req.body.items) {
+        const prod = await Product.findOne({ name: item.name });
+        populatedItems.push({
+          ...item,
+          purchasePrice: prod ? (prod.purchasePrice || 0) : 0
+        });
+      }
+    }
+
     const orderData = {
       ...req.body,
+      items: populatedItems,
       orderId,
       date: new Date()
     };

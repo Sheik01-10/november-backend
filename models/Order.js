@@ -111,6 +111,10 @@ const orderSchema = new mongoose.Schema(
           type: Number,
           required: true
         },
+        purchasePrice: {
+          type: Number,
+          default: 0
+        },
         size: {
           type: String,
           default: ""
