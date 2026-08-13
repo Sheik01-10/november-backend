@@ -104,6 +104,29 @@ app.post("/api/verify-payment", require("./controllers/paymentController").verif
 app.use("/api/support", supportRoutes);
 app.use("/api/staff", staffRoutes);
 
+// Proxy pincode requests to bypass browser CORS policy
+const https = require("https");
+app.get("/api/pincode/:pin", (req, res) => {
+  const { pin } = req.params;
+  https.get(`https://api.postalpincode.in/pincode/${pin}`, (apiRes) => {
+    let data = "";
+    apiRes.on("data", (chunk) => {
+      data += chunk;
+    });
+    apiRes.on("end", () => {
+      try {
+        const jsonData = JSON.parse(data);
+        res.json(jsonData);
+      } catch (err) {
+        console.error("Failed to parse pincode data:", err);
+        res.status(500).json({ message: "Failed to parse pincode data" });
+      }
+    });
+  }).on("error", (err) => {
+    console.error("Pincode fetch error:", err);
+    res.status(500).json({ message: err.message });
+  });
+});
 
 app.get("/", (req, res) => {
   res.send("The November API Running with WebSockets Enabled");
