@@ -82,7 +82,7 @@ productSchema.pre("save", async function () {
   if (this.comparePrice && this.comparePrice > this.price) {
     const discount = Math.round(((this.comparePrice - this.price) / this.comparePrice) * 100);
     this.pct = `-${discount}%`;
-  } else {
+  } else if (!this.pct) {
     this.pct = "";
   }
 });
