@@ -12,6 +12,7 @@ const path = require("path");
 const productRoutes = require("./routes/productRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const orderRoutes = require("./routes/orderRoutes");
+const stockRoutes = require("./routes/stockRoutes");
 const bannerRoutes = require("./routes/bannerRoutes");
 const userRoutes = require("./routes/userRoutes");
 const wishlistRoutes = require("./routes/wishlistRoutes");
@@ -24,6 +25,7 @@ const staffRoutes = require("./routes/staffRoutes");
 
 const app = express();
 const server = http.createServer(app);
+
 
 // Socket.io configuration
 const io = new Server(server, {
@@ -92,6 +94,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/stock", stockRoutes);
 app.use("/api/banners", bannerRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/wishlist", wishlistRoutes);

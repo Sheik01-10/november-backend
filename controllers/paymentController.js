@@ -45,6 +45,20 @@ exports.createCashfreeOrder = async (req, res) => {
         if (!product) {
           return res.status(404).json({ message: `Product not found: ${item.name || productId}` });
         }
+
+        // Verify size stock or overall stock
+        if (product.sizesStock && product.sizesStock.length > 0 && item.size) {
+          const szStock = product.sizesStock.find(s => s.size === item.size);
+          const available = szStock ? szStock.balance : 0;
+          if (available < (item.quantity || 1)) {
+            return res.status(400).json({ message: `Insufficient stock for ${product.name} (Size ${item.size}). Available: ${available}, Requested: ${item.quantity || 1}` });
+          }
+        } else {
+          if (product.stockQuantity < (item.quantity || 1)) {
+            return res.status(400).json({ message: `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity || 1}` });
+          }
+        }
+
         subtotal += product.price * (item.quantity || 1);
         const charge = product.deliveryCharge !== undefined ? product.deliveryCharge : 150;
         shippingCharge += charge * (item.quantity || 1);
@@ -221,6 +235,30 @@ exports.verifyCashfreePayment = async (req, res) => {
     });
 
     const savedOrder = await newOrder.save();
+
+    // Log stock movements and recalculate stock balances
+    const StockMovement = require("../models/StockMovement");
+    const { recalculateStock } = require("../utils/stockHelper");
+    for (const item of savedOrder.items) {
+      const prod = await Product.findOne({ name: item.name });
+      if (prod) {
+        const previousStock = prod.stockQuantity || 0;
+        await StockMovement.create({
+          productId: prod._id,
+          productName: prod.name,
+          sku: prod.sku || "",
+          type: "Stock Sold",
+          quantity: item.quantity,
+          size: item.size || "",
+          previousStock: previousStock,
+          updatedStock: Math.max(0, previousStock - item.quantity),
+          reason: `Order placed (Paid): ${savedOrder.orderId}`,
+          updatedBy: "Customer",
+          orderId: savedOrder.orderId
+        });
+        await recalculateStock(prod._id);
+      }
+    }
 
     // Update User order history
     if (!user.orders) {

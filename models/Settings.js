@@ -43,6 +43,10 @@ const settingsSchema = new mongoose.Schema(
     freeShippingThreshold: {
       type: Number,
       default: 999
+    },
+    lowStockThreshold: {
+      type: Number,
+      default: 5
     }
   },
   { timestamps: true }

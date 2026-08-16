@@ -70,6 +70,31 @@ const productSchema = new mongoose.Schema(
       default: 0,
     },
 
+    initialStock: {
+      type: Number,
+      default: 0,
+    },
+
+    stockAdded: {
+      type: Number,
+      default: 0,
+    },
+
+    sizesStock: [
+      {
+        size: { type: String, required: true },
+        initial: { type: Number, default: 0 },
+        added: { type: Number, default: 0 },
+        balance: { type: Number, default: 0 }
+      }
+    ],
+
+    sku: {
+      type: String,
+      unique: true,
+      sparse: true
+    },
+
     deliveryCharge: {
       type: Number,
       default: 150,

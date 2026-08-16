@@ -26,14 +26,22 @@ exports.createProduct = async (req, res) => {
   try {
     const product = new Product(req.body);
     const newProduct = await product.save();
-    
+
+    const { recalculateStock } = require("../utils/stockHelper");
+
+    // Run initial stock recalculation
+    await recalculateStock(newProduct._id);
+
+    // Refetch the recalculated product to emit correct details
+    const finalProduct = await Product.findById(newProduct._id);
+
     // Emit socket event
     const io = req.app.get("io");
     if (io) {
-      io.emit("product_changed", { action: "create", data: newProduct });
+      io.emit("product_changed", { action: "create", data: finalProduct });
     }
     
-    res.status(201).json(newProduct);
+    res.status(201).json(finalProduct);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -48,13 +56,19 @@ exports.updateProduct = async (req, res) => {
     Object.assign(product, req.body);
     const updatedProduct = await product.save();
 
+    const { recalculateStock } = require("../utils/stockHelper");
+    await recalculateStock(updatedProduct._id);
+
+    // Refetch final product after stock recalculation
+    const finalProduct = await Product.findById(updatedProduct._id);
+
     // Emit socket event
     const io = req.app.get("io");
     if (io) {
-      io.emit("product_changed", { action: "update", data: updatedProduct });
+      io.emit("product_changed", { action: "update", data: finalProduct });
     }
 
-    res.json(updatedProduct);
+    res.json(finalProduct);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
