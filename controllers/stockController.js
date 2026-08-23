@@ -22,8 +22,17 @@ exports.getStockSummary = async (req, res) => {
     let outOfStockCount = 0;
     
     for (const prod of products) {
-      const added = prod.stockAdded || 0;
-      const initial = prod.initialStock || 0;
+      let initial = 0;
+      let added = 0;
+      
+      if (prod.sizesStock && prod.sizesStock.length > 0) {
+        initial = prod.sizesStock.reduce((acc, curr) => acc + (curr.initial || 0), 0);
+        added = prod.sizesStock.reduce((acc, curr) => acc + (curr.added || 0), 0);
+      } else {
+        initial = prod.initialStock || 0;
+        added = prod.stockAdded || 0;
+      }
+      
       totalStock += (initial + added);
       stockAdded += added;
       
@@ -39,12 +48,15 @@ exports.getStockSummary = async (req, res) => {
       }
     }
     
-    // Calculate total sold dynamically from active orders
-    const orders = await Order.find({ status: { $ne: "Cancelled" } });
+    // Calculate total sold dynamically from active orders matching active products
+    const productNames = products.map(p => p.name);
+    const orders = await Order.find({ status: { $ne: "Cancelled" }, "items.name": { $in: productNames } });
     let totalSold = 0;
     for (const order of orders) {
       for (const item of order.items) {
-        totalSold += item.quantity;
+        if (productNames.includes(item.name)) {
+          totalSold += item.quantity;
+        }
       }
     }
     
@@ -139,6 +151,12 @@ exports.getStockProducts = async (req, res) => {
     
     let productsWithSold = products.map(prod => {
       const prodJson = prod.toJSON();
+      
+      if (prod.sizesStock && prod.sizesStock.length > 0) {
+        prodJson.initialStock = prod.sizesStock.reduce((acc, curr) => acc + (curr.initial || 0), 0);
+        prodJson.stockAdded = prod.sizesStock.reduce((acc, curr) => acc + (curr.added || 0), 0);
+      }
+      
       prodJson.totalSold = soldCounts[prod.name] || 0;
       prodJson.stockStatus = prodJson.stockQuantity === 0 
         ? "Out of Stock" 

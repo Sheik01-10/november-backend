@@ -67,6 +67,9 @@ const recalculateStock = async (productId) => {
 
       // Overall balance is sum of size balances
       product.stockQuantity = product.sizesStock.reduce((acc, curr) => acc + (curr.balance || 0), 0);
+      
+      // Synchronize overall initialStock with the sum of size-wise initial stocks
+      product.initialStock = product.sizesStock.reduce((acc, curr) => acc + (curr.initial || 0), 0);
     } else {
       product.stockQuantity = calculatedBalance;
     }
