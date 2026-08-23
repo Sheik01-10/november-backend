@@ -33,18 +33,20 @@ const recalculateStock = async (productId) => {
       }
     }
 
-    // 2. Calculate manual additions from StockMovement of types: "Stock Added", "Stock Adjustment"
+    // 2. Calculate manual additions from StockMovement of types: "Stock Added", "Stock Adjustment", "Stock Returned"
     const movements = await StockMovement.find({
       productId: product._id,
-      type: { $in: ["Stock Added", "Stock Adjustment"] }
+      type: { $in: ["Stock Added", "Stock Adjustment", "Stock Returned"] }
     });
 
     let totalAdded = 0;
     const sizeAddedMap = {};
     for (const move of movements) {
-      totalAdded += move.quantity;
+      // Calculate delta to support both positive additions and negative reductions
+      const delta = move.updatedStock - move.previousStock;
+      totalAdded += delta;
       const sz = move.size || "NO_SIZE";
-      sizeAddedMap[sz] = (sizeAddedMap[sz] || 0) + move.quantity;
+      sizeAddedMap[sz] = (sizeAddedMap[sz] || 0) + delta;
     }
 
     // Update product overall initial/added/sold
