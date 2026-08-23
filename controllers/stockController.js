@@ -302,3 +302,43 @@ exports.refreshStockData = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// 6. Delete stock movement log and recalculate product stock
+exports.deleteStockMovement = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const movement = await StockMovement.findById(id);
+    if (!movement) {
+      return res.status(404).json({ message: "Stock movement not found" });
+    }
+    
+    const productId = movement.productId;
+    await movement.deleteOne();
+    
+    let recalculated = null;
+    if (productId) {
+      const Product = require("../models/Product");
+      const product = await Product.findById(productId);
+      if (product) {
+        recalculated = await recalculateStock(productId);
+      }
+    }
+    
+    // Emit socket events
+    const io = req.app.get("io");
+    if (io) {
+      if (recalculated) {
+        io.emit("product_changed", { action: "update", data: recalculated.product });
+      }
+      io.emit("stock_changed", { action: "delete", data: { _id: id } });
+    }
+    
+    res.json({
+      success: true,
+      message: "Stock movement log deleted and inventory recalculated.",
+      product: recalculated ? recalculated.product : null
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
